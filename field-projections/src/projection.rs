@@ -3,7 +3,7 @@ use std::{marker::PhantomData, ptr::Pointee};
 use crate::*;
 
 // TODO: inspect projections
-pub trait Projection: Sized {
+pub trait Projection {
     type Source: ?Sized;
     type Target: ?Sized;
 
@@ -15,7 +15,7 @@ pub trait Projection: Sized {
 }
 
 /// Extension trait so that `Projection` stays dyn-compatible.
-impl<P: Projection> ProjectionExt for P {}
+impl<P: Projection + ?Sized> ProjectionExt for P {}
 pub trait ProjectionExt: Projection {
     /// Convenience method that simply calls the corresponding PlaceBorrow method.
     unsafe fn borrow<'a, X, Y>(&self, ptr: *const X) -> Y
@@ -52,8 +52,19 @@ pub trait ProjectionExt: Projection {
         unsafe { self.borrow(ptr) }
     }
 
+    /// When the target is sized, we know a projection is just an offset so we can make it sized
+    /// even if we had a `dyn Projection`.
+    /// Definitely a bit hacky.
+    fn as_sized(&self) -> SizedProj<Self::Source, Self::Target>
+    where
+        Self::Target: Sized,
+    {
+        SizedProj(self.offset(), PhantomData, PhantomData)
+    }
+
     fn compose<Q>(self, other: Q) -> ComposeProj<Self, Q>
     where
+        Self: Sized,
         Q: Projection<Source = Self::Target>,
     {
         ComposeProj(self, other)
@@ -82,6 +93,22 @@ impl<T> Projection for NoopProj<T> {
         m: <Self::Source as Pointee>::Metadata,
     ) -> <Self::Target as Pointee>::Metadata {
         m
+    }
+}
+
+/// Sized projection that holds only an offset.
+#[derive(Clone)]
+pub struct SizedProj<S: ?Sized, T>(usize, PhantomData<S>, PhantomData<T>);
+impl<S, T> Projection for SizedProj<S, T> {
+    type Source = S;
+    type Target = T;
+    fn offset(&self) -> usize {
+        self.0
+    }
+    fn project_metadata(
+        &self,
+        _: <Self::Source as Pointee>::Metadata,
+    ) -> <Self::Target as Pointee>::Metadata {
     }
 }
 

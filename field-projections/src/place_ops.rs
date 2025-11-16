@@ -5,8 +5,10 @@ pub trait HasPlace {
 }
 
 /// Borrow a subplace.
-pub unsafe trait PlaceBorrow<'a, P: Projection, X>: HasPlace<Target = P::Source>
+pub unsafe trait PlaceBorrow<'a, P, X>
 where
+    P: Projection + ?Sized,
+    Self: HasPlace<Target = P::Source>,
     X: HasPlace<Target = P::Target>,
 {
     /// Tells the borrow-checker what other simultaneous and subsequent
@@ -33,35 +35,51 @@ pub enum BorrowKind {
 }
 
 /// Read a value from a subplace.
-pub unsafe trait PlaceRead<P: Projection>: HasPlace<Target = P::Source> {
+pub unsafe trait PlaceRead<P>
+where
+    P: Projection + ?Sized,
+    Self: HasPlace<Target = P::Source>,
+{
     unsafe fn read(ptr: *const Self, p: &P) -> P::Target
     where
         P::Target: Sized;
 }
 
 /// Write to a subplace.
-pub unsafe trait PlaceWrite<P: Projection>: HasPlace<Target = P::Source> {
+pub unsafe trait PlaceWrite<P>
+where
+    P: Projection + ?Sized,
+    Self: HasPlace<Target = P::Source>,
+{
     unsafe fn write(ptr: *mut Self, p: &P, x: P::Target)
     where
         P::Target: Sized;
 }
 
 /// Allows moving a value out of a subplace. This uses `PlaceRead::read` to read the value.
-pub unsafe trait PlaceMove<P: Projection>: PlaceRead<P> {}
+pub unsafe trait PlaceMove<P>: PlaceRead<P>
+where
+    P: Projection + ?Sized,
+{
+}
 
 /// Allows dereferencing a subplace that contains a pointer. This piggy-backs on
 /// `*const`-reborrowing. `PlaceRead` is insufficient since the pointer may not be `Copy`.
-pub unsafe trait PlaceDeref<P: Projection>: HasPlace<Target = P::Source>
+pub unsafe trait PlaceDeref<P>
 where
+    P: Projection + ?Sized,
     P::Target: HasPlace,
+    Self: HasPlace<Target = P::Source>,
     Self: for<'a> PlaceBorrow<'a, P, *const P::Target>,
 {
 }
 
 /// Allows dropping a subplace. This piggy-backs on `*mut`-reborrowing.
-pub unsafe trait PlaceDrop<P: Projection>: HasPlace<Target = P::Source>
+pub unsafe trait PlaceDrop<P>
 where
+    P: Projection + ?Sized,
     P::Target: HasPlace,
+    Self: HasPlace<Target = P::Source>,
     Self: for<'a> PlaceBorrow<'a, P, *mut P::Target>,
 {
 }

@@ -23,12 +23,12 @@ macro_rules! mk_field_proj {
             type Source = $src_ty;
             type Target = $tgt_ty;
             fn offset(&self) -> usize {
-                offset_of!($src_ty, $field)
+                core::mem::offset_of!($src_ty, $field)
             }
             fn project_metadata(
                 &self,
-                _: <Self::Source as Pointee>::Metadata,
-            ) -> <Self::Target as Pointee>::Metadata {
+                _: <Self::Source as core::ptr::Pointee>::Metadata,
+            ) -> <Self::Target as core::ptr::Pointee>::Metadata {
             }
         }
     };
@@ -97,7 +97,7 @@ macro_rules! p {
             $($rest:tt)*
         )
     )) => {
-        $crate::p!(#parse(
+        $crate::p!(#parse_base(
             $action($($action_args)*),
             input($($place)* $($rest)*)
         ))
@@ -110,7 +110,7 @@ macro_rules! p {
     //         $($rest:tt)*
     //     )
     // )) => {
-    //     $crate::p!(#parse(
+    //     $crate::p!(#parse_proj(
     //         $action($($action_args)*),
     //         local($local),
     //         input($($rest)*)
@@ -222,11 +222,11 @@ macro_rules! p {
         $proj.write($start, $rvalue)
     };
     (#do_action(
-        borrow($ptr:ident),
+        borrow($($ptr_ty:tt)*),
         start($start:expr),
         project($proj:expr),
     )) => {
-        $proj.borrow::<_, $ptr<_>>($start)
+        $proj.borrow::<_, $($ptr_ty)*>($start)
     };
 
     // Catch internal errors instead of looping back to the catch-all case below.
@@ -235,9 +235,17 @@ macro_rules! p {
     };
 
     // Entrypoints.
-    // @Ptr <place_expr>
+    // @_ place_expr (let inference determine the target pointer)
+    (@_ $($place:tt)*) => {
+        $crate::p!(#parse_base(borrow(_), input($($place)*)))
+    };
+    // @Ptr<ty_params> place_expr
+    (@$ptr:ident<$($ty:ty),*> $($place:tt)*) => {
+        $crate::p!(#parse_base(borrow($ptr<$($ty),*>), input($($place)*)))
+    };
+    // @Ptr place_expr
     (@$ptr:ident $($place:tt)*) => {
-        $crate::p!(#parse_base(borrow($ptr), input($($place)*)))
+        $crate::p!(#parse_base(borrow($ptr<_>), input($($place)*)))
     };
     // Anything else
     ($($place:tt)*) => {

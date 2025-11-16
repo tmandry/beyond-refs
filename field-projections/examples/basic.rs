@@ -4,8 +4,6 @@
 
 use place_projections::*;
 
-use std::{mem::offset_of, ptr::Pointee};
-
 type Ptr<T> = *mut T;
 
 struct Foo {
