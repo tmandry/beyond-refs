@@ -74,14 +74,15 @@ where
 {
 }
 
-/// Allows dropping a subplace. This piggy-backs on `*mut`-reborrowing.
+/// Drop the contents of a subplace.
 pub unsafe trait PlaceDrop<P>
 where
     P: Projection + ?Sized,
     P::Target: HasPlace,
     Self: HasPlace<Target = P::Source>,
-    Self: for<'a> PlaceBorrow<'a, P, *mut P::Target>,
 {
+    /// Should call `drop_in_place` on the subplace.
+    unsafe fn drop(ptr: *mut Self, p: &P);
 }
 
 /// Clean up a pointer whose contained place has been moved out of/dropped.
