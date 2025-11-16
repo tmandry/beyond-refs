@@ -4,15 +4,35 @@ pub trait HasPlace {
     type Target: ?Sized;
 }
 
-/// Reborrow a subplace.
+/// Borrow a subplace.
 pub unsafe trait PlaceBorrow<'a, P: Projection, X>: HasPlace<Target = P::Source>
 where
     X: HasPlace<Target = P::Target>,
 {
+    /// Tells the borrow-checker what other simultaneous and subsequent
+    /// borrows are allowed.
+    const BORROW_KIND: BorrowKind;
+
     unsafe fn borrow(ptr: *const Self, p: &P) -> X;
 }
 
-/// Read a subplace.
+#[non_exhaustive]
+pub enum BorrowKind {
+    /// Other borrows are allowed (like `*mut T` and `RcRef<T>`).
+    Untracked,
+    /// Other `Shared` simultaneous borrows are allowed (like `&T`).
+    Shared,
+    /// No other simultaneous tracked borrows are allowed (like `&mut T`).
+    Unique,
+    /// No other simultaneous or subsequent borrows are allowed (like `&own T`).
+    Owning,
+    /// No other simultaneous tracked borrows are allowed and `drop` must be
+    /// called before the underlying memory is reclaimed (like `&pin mut T`).
+    UniquePinning,
+    // maybe other things?
+}
+
+/// Read a value from a subplace.
 pub unsafe trait PlaceRead<P: Projection>: HasPlace<Target = P::Source> {
     unsafe fn read(ptr: *const Self, p: &P) -> P::Target
     where
@@ -21,7 +41,9 @@ pub unsafe trait PlaceRead<P: Projection>: HasPlace<Target = P::Source> {
 
 /// Write to a subplace.
 pub unsafe trait PlaceWrite<P: Projection>: HasPlace<Target = P::Source> {
-    unsafe fn write(ptr: *mut Self, p: &P, x: P::Target);
+    unsafe fn write(ptr: *mut Self, p: &P, x: P::Target)
+    where
+        P::Target: Sized;
 }
 
 /// Allows moving a value out of a subplace. This uses `PlaceRead::read` to read the value.

@@ -1,10 +1,8 @@
 //! Crate to experiment with the API proposed in
 //! https://nadrieril.github.io/blog/2025/11/11/truly-first-class-custom-smart-pointers.html .
 #![feature(ptr_metadata)]
-use std::{
-    mem::offset_of,
-    ptr::{NonNull, Pointee},
-};
+
+use std::ptr::NonNull;
 
 mod basic_impls;
 mod projection;
@@ -12,33 +10,237 @@ pub use projection::*;
 mod place_ops;
 pub use place_ops::*;
 
-type Ptr<T> = NonNull<T>; // laziness
-type Q<T> = NonNull<T>; // laziness
-type R<T> = NonNull<T>; // laziness
-
-struct A(u32);
-struct Foo {
-    a: A,
+/// Make a unit struct that represents the projection to a particular struct field. Only works
+/// for sized types.
+///
+/// Syntax: `mk_field_proj!(struct FooAProj(Foo.a: A))`.
+#[macro_export]
+macro_rules! mk_field_proj {
+    (struct $name:ident($src_ty:ident.$field:ident: $tgt_ty:ty)) => {
+        #[derive(Clone)]
+        struct $name;
+        impl Projection for $name {
+            type Source = $src_ty;
+            type Target = $tgt_ty;
+            fn offset(&self) -> usize {
+                offset_of!($src_ty, $field)
+            }
+            fn project_metadata(
+                &self,
+                _: <Self::Source as Pointee>::Metadata,
+            ) -> <Self::Target as Pointee>::Metadata {
+            }
+        }
+    };
 }
 
-struct FooAProj;
-impl Projection for FooAProj {
-    type Source = Foo;
-    type Target = A;
-    fn offset(&self) -> usize {
-        offset_of!(Foo, a)
-    }
-    fn project_metadata(
-        &self,
-        _: <Self::Source as Pointee>::Metadata,
-    ) -> <Self::Target as Pointee>::Metadata {
-    }
-}
+/// Macro that simulates the proposed new syntax. Derefs must be explicit and the identifiers used
+/// for field projections must actually be values of some `Projection` type, e.g. built with
+/// `mk_field_proj`.
+///
+/// Examples:
+/// ```text
+/// (*p).a
+/// -> a.read(&raw const p)
+/// (*p).a.b
+/// -> a.compose(b).read(&raw const p)
+/// (**p).a
+/// -> a.read(NoopProj::default().deref(&raw const p))
+/// (*(*p).ptr_a).b
+/// -> b.read(ptr_a.deref(&raw const p))
+/// (*p).a = foo()
+/// -> a.write(&raw const p, foo())
+/// @R *p
+/// -> NoopProj::default().borrow::<_, R<_>>(&raw const p)
+/// @R (*p).a
+/// -> a.borrow::<_, R<_>>(&raw const p)
+/// @R (**p).a
+/// -> a.borrow::<_, R<_>>(NoopProj::default().deref(&raw const p))
+/// ```
+#[macro_export]
+macro_rules! p {
+    // Parse the input syntax. Step one was to check if we're borrowing or not,
+    // which happened at the user-facing entrypoint.
+    // Step 2: identify the base place, which is either a local or a deref.
+    (#parse_base(
+        $action:ident($($action_args:tt)*),
+        input(
+            // A deref
+            (*$($place:tt)*)
+            $($rest:tt)*
+        )
+    )) => {
+        $crate::p!(#parse_proj(
+            $action($($action_args)*),
+            deref($($place)*),
+            input($($rest)*)
+        ))
+    };
+    (#parse_base(
+        $action:ident($($action_args:tt)*),
+        input(
+            // A deref of a local, with no projections.
+            *$local:ident
+        )
+    )) => {
+        $crate::p!(#parse_proj(
+            $action($($action_args)*),
+            deref($local),
+            input()
+        ))
+    };
+    (#parse_base(
+        $action:ident($($action_args:tt)*),
+        input(
+            // Not a deref so we remove the parens (to support `(x.a).b`).
+            ($($place:tt)*)
+            $($rest:tt)*
+        )
+    )) => {
+        $crate::p!(#parse(
+            $action($($action_args)*),
+            input($($place)* $($rest)*)
+        ))
+    };
+    // (#parse_base(
+    //     $action:ident($($action_args:tt)*),
+    //     input(
+    //         // A local
+    //         $local:ident
+    //         $($rest:tt)*
+    //     )
+    // )) => {
+    //     $crate::p!(#parse(
+    //         $action($($action_args)*),
+    //         local($local),
+    //         input($($rest)*)
+    //     ))
+    // };
+    // Step 3: gather the possible projections.
+    (#parse_proj(
+        $action:ident($($action_args:tt)*),
+        $start:ident($($start_args:tt)*),
+        input(
+            $(.$field:ident)*
+            $(= $rvalue:expr)?
+        )
+    )) => {
+        $crate::p!(#parse_assign(
+            $action($($action_args)*),
+            $start($($start_args)*),
+            project($(.$field)*),
+            input($(= $rvalue)?)
+        ))
+    };
+    // Step 4: Detect an assignment, if any.
+    (#parse_assign(
+        read_or_write(),
+        $start:ident($($start_args:tt)*),
+        project($($proj_args:tt)*),
+        input(
+            = $rvalue:expr
+        )
+    )) => {
+        $crate::p!(#build(
+            write($rvalue),
+            $start($($start_args)*),
+            project($($proj_args)*),
+        ))
+    };
+    (#parse_assign(
+        read_or_write(),
+        $start:ident($($start_args:tt)*),
+        project($($proj_args:tt)*),
+        input()
+    )) => {
+        $crate::p!(#build(
+            read(),
+            $start($($start_args)*),
+            project($($proj_args)*),
+        ))
+    };
+    (#parse_assign(
+        $action:ident($($action_args:tt)*),
+        $start:ident($($start_args:tt)*),
+        project($($proj_args:tt)*),
+        input()
+    )) => {
+        $crate::p!(#build(
+            $action($($action_args)*),
+            $start($($start_args)*),
+            project($($proj_args)*),
+        ))
+    };
 
-fn double_deref(p: Ptr<Q<Foo>>) {
-    unsafe {
-        // let a = @R (**p).a;
-        let ptr: *const Q<Foo> = NoopProj::default().deref(&raw const p);
-        let a: R<A> = FooAProj.borrow(ptr);
-    }
+    // Helpers for the final build.
+    // Compose some field projections.
+    (#compose_projs()) => { $crate::NoopProj::default() };
+    (#compose_projs(.$field:ident $($rest:tt)*)) => { $field.compose(p!(#compose_projs($($rest)*))) };
+    // Build the pointer expression we start with. For non-idents, we call back to our parsing
+    // logic to deref a complex place expression.
+    (#build_start(deref($ptr:ident))) => { &raw const $ptr };
+    (#build_start(deref($($place:tt)*))) => {
+        $crate::p!(#parse_base(deref(), input($($place)*)))
+    };
+
+    // Evaluate the intermediate values.
+    (#build(
+        $action:ident($($action_args:tt)*),
+        $start:ident($($start_args:tt)*),
+        project($($proj_args:tt)*),
+    )) => {{
+        use $crate::ProjectionExt;
+        let proj = p!(#compose_projs($($proj_args)*));
+        let start = p!(#build_start($start($($start_args)*)));
+        $crate::p!(#do_action(
+            $action($($action_args)*),
+            start(start),
+            project(proj),
+        ))
+    }};
+
+    // Now we build the final expression.
+    (#do_action(
+        read(),
+        start($start:expr),
+        project($proj:expr),
+    )) => {
+        $proj.read($start)
+    };
+    (#do_action(
+        deref(),
+        start($start:expr),
+        project($proj:expr),
+    )) => {
+        $proj.deref($start)
+    };
+    (#do_action(
+        write($rvalue:expr),
+        start($start:expr),
+        project($proj:expr),
+    )) => {
+        $proj.write($start, $rvalue)
+    };
+    (#do_action(
+        borrow($ptr:ident),
+        start($start:expr),
+        project($proj:expr),
+    )) => {
+        $proj.borrow::<_, $ptr<_>>($start)
+    };
+
+    // Catch internal errors instead of looping back to the catch-all case below.
+    (#$($rest:tt)*) => {
+        compile_error!("Unsupported expression")
+    };
+
+    // Entrypoints.
+    // @Ptr <place_expr>
+    (@$ptr:ident $($place:tt)*) => {
+        $crate::p!(#parse_base(borrow($ptr), input($($place)*)))
+    };
+    // Anything else
+    ($($place:tt)*) => {
+        $crate::p!(#parse_base(read_or_write(), input($($place)*)))
+    };
 }
