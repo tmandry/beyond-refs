@@ -67,7 +67,7 @@ pub trait ProjectionExt: Projection {
         Self: Sized,
         Q: Projection<Source = Self::Target>,
     {
-        ComposeProj(self, other)
+        ComposeProj { p: self, q: other }
     }
 }
 
@@ -112,23 +112,26 @@ impl<S, T> Projection for SizedProj<S, T> {
     }
 }
 
-/// Projection `P` followed by `Q`.
+/// Projection `P` followed by `Q`. `P` may be unsized.
 #[derive(Clone)]
-pub struct ComposeProj<P, Q>(P, Q);
+pub struct ComposeProj<P: ?Sized, Q> {
+    q: Q,
+    p: P,
+}
 impl<P, Q> Projection for ComposeProj<P, Q>
 where
-    P: Projection,
+    P: Projection + ?Sized,
     Q: Projection<Source = P::Target>,
 {
     type Source = P::Source;
     type Target = Q::Target;
     fn offset(&self) -> usize {
-        self.0.offset() + self.1.offset()
+        self.p.offset() + self.q.offset()
     }
     fn project_metadata(
         &self,
         meta: <Self::Source as Pointee>::Metadata,
     ) -> <Self::Target as Pointee>::Metadata {
-        self.1.project_metadata(self.0.project_metadata(meta))
+        self.q.project_metadata(self.p.project_metadata(meta))
     }
 }
