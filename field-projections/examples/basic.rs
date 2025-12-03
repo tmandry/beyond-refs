@@ -55,5 +55,6 @@ fn main() {
         p!((*p).a.b.n = 73); // write to place
         assert_eq!(*ptr_n, 73);
         assert_eq!(p!((*(*p).ptr_a).b.n), 73); // read via other ptr
+        assert_eq!(p!(p.*.ptr_a.*.b.n), 73); // postfix deref is fun
     }
 }

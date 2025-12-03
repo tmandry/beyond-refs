@@ -65,17 +65,20 @@ macro_rules! p {
     (#parse_base(
         $action:ident($($action_args:tt)*),
         input(
-            // A deref
+            // A deref of a potentially-complex place expression.
             (*$($place:tt)*)
             $($rest:tt)*
         )
-    )) => {
+    )) => {{
+        use $crate::ProjectionExt;
+        let start = p!(#build_start(deref($($place)*)));
         $crate::p!(#parse_proj(
             $action($($action_args)*),
-            deref($($place)*),
+            ptr(start),
+            project(),
             input($($rest)*)
         ))
-    };
+    }};
     (#parse_base(
         $action:ident($($action_args:tt)*),
         input(
@@ -83,10 +86,24 @@ macro_rules! p {
             *$local:ident
         )
     )) => {
+        $crate::p!(#parse_base(
+            $action($($action_args)*),
+            input($local.*)
+        ))
+    };
+    (#parse_base(
+        $action:ident($($action_args:tt)*),
+        input(
+            // A postfix deref
+            $local:ident.*
+            $($rest:tt)*
+        )
+    )) => {
         $crate::p!(#parse_proj(
             $action($($action_args)*),
-            deref($local),
-            input()
+            ptr(&raw const $local),
+            project(),
+            input($($rest)*)
         ))
     };
     (#parse_base(
@@ -113,6 +130,7 @@ macro_rules! p {
     //     $crate::p!(#parse_proj(
     //         $action($($action_args)*),
     //         local($local),
+    //         project(),
     //         input($($rest)*)
     //     ))
     // };
@@ -120,15 +138,54 @@ macro_rules! p {
     (#parse_proj(
         $action:ident($($action_args:tt)*),
         $start:ident($($start_args:tt)*),
+        project($($fields:tt)*),
         input(
-            $(.$field:ident)*
+            . * // postfix deref
+            $($input:tt)*
+        )
+    )) => {{
+        // TODO
+        let p = $crate::p!(#parse_proj(
+            deref(),
+            $start($($start_args)*),
+            project($($fields)*),
+            input()
+        ));
+        $crate::p!(#parse_proj(
+            $action($($action_args)*),
+            ptr(p),
+            project(),
+            input($($input)*)
+        ))
+    }};
+    (#parse_proj(
+        $action:ident($($action_args:tt)*),
+        $start:ident($($start_args:tt)*),
+        project($($fields:tt)*),
+        input(
+            .$field:ident
+            $($rest:tt)*
+        )
+    )) => {
+        $crate::p!(#parse_proj(
+            $action($($action_args)*),
+            $start($($start_args)*),
+            project($($fields)*.$field),
+            input($($rest)*)
+        ))
+    };
+    (#parse_proj(
+        $action:ident($($action_args:tt)*),
+        $start:ident($($start_args:tt)*),
+        project($($fields:tt)*),
+        input(
             $(= $rvalue:expr)?
         )
     )) => {
         $crate::p!(#parse_assign(
             $action($($action_args)*),
             $start($($start_args)*),
-            project($(.$field)*),
+            project($($fields)*),
             input($(= $rvalue)?)
         ))
     };
@@ -186,15 +243,14 @@ macro_rules! p {
     // Evaluate the intermediate values.
     (#build(
         $action:ident($($action_args:tt)*),
-        $start:ident($($start_args:tt)*),
+        ptr($ptr:expr),
         project($($proj_args:tt)*),
     )) => {{
         use $crate::ProjectionExt;
         let proj = p!(#compose_projs($($proj_args)*));
-        let start = p!(#build_start($start($($start_args)*)));
         $crate::p!(#do_action(
             $action($($action_args)*),
-            start(start),
+            base($ptr),
             project(proj),
         ))
     }};
@@ -202,31 +258,31 @@ macro_rules! p {
     // Now we build the final expression.
     (#do_action(
         read(),
-        start($start:expr),
+        base($ptr:expr),
         project($proj:expr),
     )) => {
-        $proj.read($start)
+        $proj.read($ptr)
     };
     (#do_action(
         deref(),
-        start($start:expr),
+        base($ptr:expr),
         project($proj:expr),
     )) => {
-        $proj.deref($start.cast_mut())
+        $proj.deref($ptr.cast_mut())
     };
     (#do_action(
         write($rvalue:expr),
-        start($start:expr),
+        base($ptr:expr),
         project($proj:expr),
     )) => {
-        $proj.write($start.cast_mut(), $rvalue)
+        $proj.write($ptr.cast_mut(), $rvalue)
     };
     (#do_action(
         borrow($($ptr_ty:tt)*),
-        start($start:expr),
+        base($ptr:expr),
         project($proj:expr),
     )) => {
-        $proj.borrow::<_, $($ptr_ty)*>($start)
+        $proj.borrow::<_, $($ptr_ty)*>($ptr)
     };
 
     // Catch internal errors instead of looping back to the catch-all case below.
