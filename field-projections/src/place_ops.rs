@@ -63,15 +63,15 @@ where
 {
 }
 
-/// Allows dereferencing a subplace that contains a pointer. This piggy-backs on
-/// `*const`-reborrowing. `PlaceRead` is insufficient since the pointer may not be `Copy`.
+/// Allows dereferencing a subplace that contains a pointer. The returned pointer will only be used
+/// for further place operations.
 pub unsafe trait PlaceDeref<P>
 where
     P: Projection + ?Sized,
     P::Target: HasPlace,
     Self: HasPlace<Target = P::Source>,
-    Self: for<'a> PlaceBorrow<'a, P, *const P::Target>,
 {
+    unsafe fn double_deref(ptr: *mut Self, p: &P) -> *const P::Target;
 }
 
 /// Drop the contents of a subplace.

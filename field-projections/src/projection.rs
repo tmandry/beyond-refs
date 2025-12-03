@@ -35,21 +35,21 @@ pub trait ProjectionExt: Projection {
         unsafe { PlaceRead::read(ptr, self) }
     }
     /// Convenience method that simply calls the corresponding PlaceRead method.
-    unsafe fn write<X>(&self, ptr: *const X, val: Self::Target)
+    unsafe fn write<X>(&self, ptr: *mut X, val: Self::Target)
     where
         X: PlaceWrite<Self>,
         Self::Target: Sized,
     {
-        unsafe { PlaceWrite::write(ptr.cast_mut(), self, val) }
+        unsafe { PlaceWrite::write(ptr, self, val) }
     }
     /// Convenience method that simply calls the corresponding PlaceDeref method.
-    unsafe fn deref<X>(&self, ptr: *const X) -> *const Self::Target
+    unsafe fn deref<X>(&self, ptr: *mut X) -> *const Self::Target
     where
         X: HasPlace<Target = Self::Source>,
         X: PlaceDeref<Self>,
         Self::Target: HasPlace,
     {
-        unsafe { self.borrow(ptr) }
+        unsafe { PlaceDeref::double_deref(ptr, self) }
     }
 
     /// When the target is sized, we know a projection is just an offset so we can make it sized

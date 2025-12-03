@@ -212,14 +212,14 @@ macro_rules! p {
         start($start:expr),
         project($proj:expr),
     )) => {
-        $proj.deref($start)
+        $proj.deref($start.cast_mut())
     };
     (#do_action(
         write($rvalue:expr),
         start($start:expr),
         project($proj:expr),
     )) => {
-        $proj.write($start, $rvalue)
+        $proj.write($start.cast_mut(), $rvalue)
     };
     (#do_action(
         borrow($($ptr_ty:tt)*),

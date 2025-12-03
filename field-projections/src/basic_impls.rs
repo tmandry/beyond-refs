@@ -83,9 +83,30 @@ unsafe impl<'a, P: Projection + ?Sized> PlaceBorrow<'a, P, RawConst<P::Target>>
     }
 }
 
-unsafe impl<P: Projection + ?Sized> PlaceDeref<P> for NonNull<P::Source> where P::Target: HasPlace {}
-unsafe impl<P: Projection + ?Sized> PlaceDeref<P> for RawConst<P::Source> where P::Target: HasPlace {}
-unsafe impl<P: Projection + ?Sized> PlaceDeref<P> for RawMut<P::Source> where P::Target: HasPlace {}
+unsafe impl<P: Projection + ?Sized> PlaceDeref<P> for NonNull<P::Source>
+where
+    P::Target: HasPlace,
+{
+    unsafe fn double_deref(ptr: *mut Self, p: &P) -> *const <P as Projection>::Target {
+        unsafe { p.borrow(ptr) }
+    }
+}
+unsafe impl<P: Projection + ?Sized> PlaceDeref<P> for RawConst<P::Source>
+where
+    P::Target: HasPlace,
+{
+    unsafe fn double_deref(ptr: *mut Self, p: &P) -> *const <P as Projection>::Target {
+        unsafe { p.borrow(ptr) }
+    }
+}
+unsafe impl<P: Projection + ?Sized> PlaceDeref<P> for RawMut<P::Source>
+where
+    P::Target: HasPlace,
+{
+    unsafe fn double_deref(ptr: *mut Self, p: &P) -> *const <P as Projection>::Target {
+        unsafe { p.borrow(ptr) }
+    }
+}
 
 unsafe impl<P: Projection + ?Sized> PlaceRead<P> for RawConst<P::Source> {
     unsafe fn read(ptr: *const Self, p: &P) -> P::Target
