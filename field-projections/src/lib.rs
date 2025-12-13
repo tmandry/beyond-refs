@@ -22,7 +22,7 @@ macro_rules! mk_field_proj {
         impl Projection for $name {
             type Source = $src_ty;
             type Target = $tgt_ty;
-            fn offset(&self) -> usize {
+            fn offset(&self, _: <Self::Source as core::ptr::Pointee>::Metadata) -> usize {
                 core::mem::offset_of!($src_ty, $field)
             }
             fn project_metadata(

@@ -7,7 +7,7 @@ pub trait Projection {
     type Source: ?Sized;
     type Target: ?Sized;
 
-    fn offset(&self) -> usize;
+    fn offset(&self, meta: <Self::Source as Pointee>::Metadata) -> usize;
     fn project_metadata(
         &self,
         meta: <Self::Source as Pointee>::Metadata,
@@ -57,9 +57,10 @@ pub trait ProjectionExt: Projection {
     /// Definitely a bit hacky.
     fn as_sized(&self) -> SizedProj<Self::Source, Self::Target>
     where
+        Self::Source: Sized,
         Self::Target: Sized,
     {
-        SizedProj(self.offset(), PhantomData, PhantomData)
+        SizedProj(self.offset(()), PhantomData, PhantomData)
     }
 
     fn compose<Q>(self, other: Q) -> ComposeProj<Self, Q>
@@ -85,7 +86,7 @@ impl<T> Clone for NoopProj<T> {
 impl<T> Projection for NoopProj<T> {
     type Source = T;
     type Target = T;
-    fn offset(&self) -> usize {
+    fn offset(&self, _m: <Self::Source as Pointee>::Metadata) -> usize {
         0
     }
     fn project_metadata(
@@ -102,7 +103,7 @@ pub struct SizedProj<S: ?Sized, T>(usize, PhantomData<S>, PhantomData<T>);
 impl<S, T> Projection for SizedProj<S, T> {
     type Source = S;
     type Target = T;
-    fn offset(&self) -> usize {
+    fn offset(&self, _m: <Self::Source as Pointee>::Metadata) -> usize {
         self.0
     }
     fn project_metadata(
@@ -125,8 +126,9 @@ where
 {
     type Source = P::Source;
     type Target = Q::Target;
-    fn offset(&self) -> usize {
-        self.p.offset() + self.q.offset()
+    fn offset(&self, meta: <Self::Source as Pointee>::Metadata) -> usize {
+        let qmeta = self.p.project_metadata(meta);
+        self.p.offset(meta) + self.q.offset(qmeta)
     }
     fn project_metadata(
         &self,

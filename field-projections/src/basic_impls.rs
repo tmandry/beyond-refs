@@ -35,7 +35,7 @@ unsafe impl<'a, P: Projection + ?Sized> PlaceBorrow<'a, P, RawConst<P::Target>>
     unsafe fn borrow(ptr: *const Self, p: &P) -> RawConst<P::Target> {
         unsafe {
             let (ptr, meta) = (*ptr).to_raw_parts();
-            let ptr = ptr.byte_offset(p.offset() as isize);
+            let ptr = ptr.byte_offset(p.offset(meta) as isize);
             let meta = p.project_metadata(meta);
             std::ptr::from_raw_parts(ptr, meta)
         }
@@ -48,7 +48,7 @@ unsafe impl<'a, P: Projection + ?Sized> PlaceBorrow<'a, P, RawMut<P::Target>>
     unsafe fn borrow(ptr: *const Self, p: &P) -> RawMut<P::Target> {
         unsafe {
             let (ptr, meta) = (*ptr).to_raw_parts();
-            let ptr = ptr.byte_offset(p.offset() as isize);
+            let ptr = ptr.byte_offset(p.offset(meta) as isize);
             let meta = p.project_metadata(meta);
             std::ptr::from_raw_parts_mut(ptr, meta)
         }
