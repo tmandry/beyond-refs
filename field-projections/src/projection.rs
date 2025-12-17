@@ -72,7 +72,7 @@ pub trait ProjectionExt: Projection {
     }
 }
 
-pub struct NoopProj<T>(PhantomData<T>);
+pub struct NoopProj<T: ?Sized>(PhantomData<T>);
 impl<T> Default for NoopProj<T> {
     fn default() -> Self {
         Self(Default::default())
@@ -83,7 +83,7 @@ impl<T> Clone for NoopProj<T> {
         Self(self.0.clone())
     }
 }
-impl<T> Projection for NoopProj<T> {
+impl<T: ?Sized> Projection for NoopProj<T> {
     type Source = T;
     type Target = T;
     fn offset(&self, _m: <Self::Source as Pointee>::Metadata) -> usize {

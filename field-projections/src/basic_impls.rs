@@ -82,6 +82,28 @@ unsafe impl<'a, P: Projection + ?Sized> PlaceBorrow<'a, P, RawConst<P::Target>>
         unsafe { p.borrow::<RawMut<_>, RawMut<_>>(ptr) }
     }
 }
+unsafe impl<'a, P: Projection + ?Sized> PlaceBorrow<'a, P, RawConst<P::Target>>
+    for SharedRef<'_, P::Source>
+{
+    const BORROW_KIND: BorrowKind = BorrowKind::Untracked;
+    unsafe fn borrow(ptr: *const Self, p: &P) -> RawConst<P::Target> {
+        unsafe {
+            let r: *const *const Self::Target = ptr.cast();
+            p.borrow::<RawConst<_>, RawConst<_>>(r)
+        }
+    }
+}
+unsafe impl<'a, P: Projection + ?Sized> PlaceBorrow<'a, P, RawConst<P::Target>>
+    for MutRef<'_, P::Source>
+{
+    const BORROW_KIND: BorrowKind = BorrowKind::Untracked;
+    unsafe fn borrow(ptr: *const Self, p: &P) -> RawConst<P::Target> {
+        unsafe {
+            let r: *const *mut Self::Target = ptr.cast();
+            p.borrow::<RawMut<_>, RawMut<_>>(r)
+        }
+    }
+}
 
 unsafe impl<P: Projection + ?Sized> PlaceDeref<P> for NonNull<P::Source>
 where
@@ -100,6 +122,22 @@ where
     }
 }
 unsafe impl<P: Projection + ?Sized> PlaceDeref<P> for RawMut<P::Source>
+where
+    P::Target: HasPlace,
+{
+    unsafe fn double_deref(ptr: *mut Self, p: &P) -> *const <P as Projection>::Target {
+        unsafe { p.borrow(ptr) }
+    }
+}
+unsafe impl<P: Projection + ?Sized> PlaceDeref<P> for SharedRef<'_, P::Source>
+where
+    P::Target: HasPlace,
+{
+    unsafe fn double_deref(ptr: *mut Self, p: &P) -> *const <P as Projection>::Target {
+        unsafe { p.borrow(ptr) }
+    }
+}
+unsafe impl<P: Projection + ?Sized> PlaceDeref<P> for MutRef<'_, P::Source>
 where
     P::Target: HasPlace,
 {
@@ -142,4 +180,17 @@ unsafe impl<P: Projection + ?Sized> PlaceWrite<P> for RawMut<P::Source> {
     {
         unsafe { p.borrow::<RawMut<_>, RawMut<_>>(ptr).write(x) }
     }
+}
+
+unsafe impl<'a, 'b, T: ?Sized> PlaceCoerce<&'a &'b T> for &'b T {
+    type Output = &'b T;
+}
+unsafe impl<'a, 'b, T: ?Sized> PlaceCoerce<&'a mut &'b T> for &'b T {
+    type Output = &'b T;
+}
+unsafe impl<'a, 'b, T: ?Sized> PlaceCoerce<&'a &'b mut T> for &'b mut T {
+    type Output = &'a T;
+}
+unsafe impl<'a, 'b, T: ?Sized> PlaceCoerce<&'a mut &'b mut T> for &'b mut T {
+    type Output = &'a mut T;
 }

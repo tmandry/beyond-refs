@@ -90,3 +90,14 @@ pub unsafe trait DropHusk: HasPlace {
     /// Drop the pointer but not the contents of the place (borrowck takes care of that).
     unsafe fn drop_husk(ptr: *mut Self);
 }
+
+/// If at a coercion site an expression `e` has type `T` but type `U` was expected, and `T:
+/// HasPlace` and `T::Target: PlaceCoerce<T>`, then we replace `e` with `@T::Target::Output **e`
+/// and repeat this until types match and raise an error otherwise.
+pub unsafe trait PlaceCoerce<From>: HasPlace
+where
+    From: HasPlace<Target = Self>,
+    From: PlaceDeref<NoopProj<Self>>,
+{
+    type Output: HasPlace<Target = Self::Target>;
+}

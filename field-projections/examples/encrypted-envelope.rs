@@ -1,5 +1,4 @@
 #![feature(ptr_metadata)]
-#![feature(new_zeroed_alloc)]
 
 use std::marker::PhantomData;
 
