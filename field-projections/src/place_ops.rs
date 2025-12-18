@@ -101,3 +101,12 @@ where
 {
     type Output: HasPlace<Target = Self::Target>;
 }
+
+/// If `X: PlaceWrap` and `X::Target` has a field `field`, then `X` itself acquires a virtual field
+/// named `field` as well. That field has type `<X as
+/// PlaceWrap<proj_ty!(X::Target.field)>>::WrappedProj::Target`, and `WrappedProj` is the
+/// projection used when we refer to that field.
+pub unsafe trait PlaceWrap<P: Projection<Source = Self::Target>>: HasPlace {
+    type WrappedProj: Projection<Source = Self>;
+    fn wrap_proj(p: &P) -> Self::WrappedProj;
+}
