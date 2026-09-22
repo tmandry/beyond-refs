@@ -39,7 +39,7 @@ pages: doc legacy-doc
     done
     popd
 
-    cp .github/workflows/overview-head.template.html target/pages/index.html
+    cp templates/overview-head.template.html target/pages/index.html
 
     LINKS_HTML=""
     # ls -r handles the reverse alphanumeric sorting perfectly for numbered prefixes
@@ -49,4 +49,4 @@ pages: doc legacy-doc
             >> target/pages/index.html
     done
 
-    cat .github/workflows/overview-tail.template.html >> target/pages/index.html
+    cat templates/overview-tail.template.html >> target/pages/index.html

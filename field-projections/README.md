@@ -1,6 +1,6 @@
 # Field Projection Designs
 
-[**Rendered**](https://bennolossin.github.io/field-projections-designs/)
+[**Rendered**](https://rust-lang.github.io/beyond-refs/field-projections/)
 
 ## Overview
 
